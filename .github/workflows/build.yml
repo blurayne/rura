@@ -1,0 +1,72 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            use_cross: true
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            use_cross: false
+          - os: macos-13
+            target: x86_64-apple-darwin
+            use_cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build (cargo)
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rura-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/rura
+          if-no-files-found: error
+          retention-days: 30
