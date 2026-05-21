@@ -9,6 +9,7 @@ mod props;
 mod rura;
 mod rura_widget;
 mod search_widget;
+mod state;
 mod theme;
 mod uicmd;
 
@@ -82,6 +83,16 @@ fn run(args: Args, config: config::Config) -> Result<()> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
 
+    let kitty = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+    if kitty {
+        let _ = crossterm::execute!(
+            std::io::stderr(),
+            crossterm::event::PushKeyboardEnhancementFlags(
+                crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+            )
+        );
+    }
+
     let app = App::new(
         args,
         &config.theme,
@@ -92,6 +103,13 @@ fn run(args: Args, config: config::Config) -> Result<()> {
         config.debounce_duration_ms,
     );
     let last_command = app.run(&mut terminal)?;
+
+    if kitty {
+        let _ = crossterm::execute!(
+            std::io::stderr(),
+            crossterm::event::PopKeyboardEnhancementFlags
+        );
+    }
 
     info!("Restoring terminal");
     ratatui::restore();
